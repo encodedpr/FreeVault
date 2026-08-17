@@ -1,0 +1,17 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Kms.Domain/Kms.Domain.csproj" />
+    <Project Path="src/Kms.AlwaysEncryptedBridge/Kms.AlwaysEncryptedBridge.csproj" />
+    <Project Path="src/Kms.AeProbe/Kms.AeProbe.csproj" />
+    <Project Path="src/Kms.CekRewrapRunner/Kms.CekRewrapRunner.csproj" />
+    <Project Path="src/Kms.Host/Kms.Host.csproj" />
+    <Project Path="src/Kms.Infrastructure/Kms.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Kms.Host.Tests/Kms.Host.Tests.csproj" />
+    <Project Path="tests/Kms.AlwaysEncryptedBridge.Tests/Kms.AlwaysEncryptedBridge.Tests.csproj" />
+    <Project Path="tests/Kms.AeProbe.Tests/Kms.AeProbe.Tests.csproj" />
+    <Project Path="tests/Kms.CekRewrapRunner.Tests/Kms.CekRewrapRunner.Tests.csproj" />
+    <Project Path="tests/Kms.Infrastructure.Tests/Kms.Infrastructure.Tests.csproj" />
+  </Folder>
+</Solution>

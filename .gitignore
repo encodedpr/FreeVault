@@ -1,0 +1,35 @@
+# Build, IDE, package, and test output
+[Bb]in/
+[Oo]bj/
+.vs/
+TestResults/
+artifacts/
+*.nupkg
+*.snupkg
+
+# Docker staging is generated locally and may contain an application publish.
+docker/stage/
+
+# Never version cryptographic material or secret-bearing configuration.
+*.pfx
+*.p12
+*.pem
+*.key
+*.snk
+*.publishsettings
+.env
+.env.*
+appsettings*.json
+secrets.json
+
+# Never version database copies, backups, logs, or local validation staging.
+*.bak
+*.bacpac
+*.dacpac
+*.mdf
+*.ndf
+*.ldf
+*.sqlite
+*.db
+*.log
+local/

@@ -1,0 +1,11 @@
+.git
+**/bin
+**/obj
+local
+docker/state
+docker/stage
+*.pfx
+*.p12
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal

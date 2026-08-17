@@ -1,0 +1,17 @@
+services:
+  kms:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.kms
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      KMS_ROOT_KEY_FILE: /run/kms/root-key.bin
+      KMS_STATE_PATH: /var/lib/kms/freevault.sqlite
+      KMS_BOOTSTRAP_TENANT_ID: ${KMS_BOOTSTRAP_TENANT_ID}
+      KMS_BOOTSTRAP_CLIENT_ID: ${KMS_BOOTSTRAP_CLIENT_ID}
+      KMS_BOOTSTRAP_CLIENT_SECRET_FILE: /run/kms/bootstrap-client-secret.txt
+    volumes:
+      - ../local/root-key.bin:/run/kms/root-key.bin:ro
+      - ../local/bootstrap-client-secret.txt:/run/kms/bootstrap-client-secret.txt:ro
+      - ./state:/var/lib/kms
