@@ -19,11 +19,11 @@ public sealed class RewrapOptionsTests
     }
 
     [Fact]
-    public void Parse_requires_a_version_pinned_https_freevault_key_url()
+    public void Parse_accepts_a_version_pinned_https_freevault_key_url()
     {
-        var exception = Assert.Throws<ArgumentException>(() => RewrapOptions.Parse(Arguments(keyUrl: "https://kms.example.test/keys/always-encrypted")));
+        var options = RewrapOptions.Parse(Arguments(keyUrl: "https://kms.example.test/keys/always-encrypted/version-1"));
 
-        Assert.Contains("version-pinned", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("https://kms.example.test/keys/always-encrypted/version-1", options.FreeVaultKeyUrl.AbsoluteUri);
     }
 
     [Fact]
@@ -32,6 +32,14 @@ public sealed class RewrapOptionsTests
         var exception = Assert.Throws<ArgumentException>(() => RewrapOptions.Parse(Arguments(keyUrl: "https://credential@kms.example.test/keys/always-encrypted/version-1")));
 
         Assert.Contains("credential", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Parse_rejects_a_non_pinned_freevault_key_url()
+    {
+        var exception = Assert.Throws<ArgumentException>(() => RewrapOptions.Parse(Arguments(keyUrl: "https://kms.example.test/keys/always-encrypted")));
+
+        Assert.Contains("version-pinned", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

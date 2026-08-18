@@ -10,6 +10,7 @@ public sealed class DockerContractTests
         Assert.Contains("KMS_ROOT_KEY_FILE", compose, StringComparison.Ordinal);
         Assert.Contains("/run/kms/root-key.bin:ro", compose, StringComparison.Ordinal);
         Assert.DoesNotContain("PFX", compose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("127.0.0.1:8080:8080", compose, StringComparison.Ordinal);
     }
 
     private static string RepositoryRoot()

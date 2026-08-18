@@ -1,4 +1,5 @@
 using Kms.AlwaysEncryptedBridge;
+using System.Security.Cryptography;
 
 namespace Kms.AlwaysEncryptedBridge.Tests;
 
@@ -58,5 +59,33 @@ public sealed class KmsAzureKeyVaultProviderFactoryTests
 
         Assert.NotNull(entryPoint);
         Assert.NotNull(entryPoint!.GetMethod("Initialize", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static));
+    }
+
+    [Fact]
+    public void Official_provider_accepts_the_phase_zero_pinned_key_url_before_token_acquisition()
+    {
+        var secretFile = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllText(secretFile, Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)));
+            var options = new KmsClientCredentialsOptions(
+                new Uri("https://127.0.0.1:1"),
+                Guid.NewGuid(),
+                "phase-zero-client",
+                secretFile);
+            var provider = KmsAzureKeyVaultProviderFactory.Create(options);
+
+            var exception = Record.Exception(() => provider.EncryptColumnEncryptionKey(
+                "https://127.0.0.1:1/keys/always-encrypted/0123456789abcdef0123456789abcdef",
+                "RSA_OAEP",
+                RandomNumberGenerator.GetBytes(32)));
+
+            Assert.NotNull(exception);
+            Assert.IsNotType<ArgumentException>(exception);
+        }
+        finally
+        {
+            File.Delete(secretFile);
+        }
     }
 }

@@ -56,15 +56,22 @@ app.MapPost("/keys/{name}/create", (string name, HttpRequest request, BootstrapK
         return Unauthorized(request, configured, oidc);
     }
 
-    if (string.IsNullOrWhiteSpace(name))
+    if (!IsValidKeyName(name))
     {
         return Results.BadRequest(new { error = new { code = "BadParameter", message = "A key name is required." } });
     }
 
     var id = new KmsKeyId(new TenantId(configured.TenantId), "default", name, Guid.NewGuid().ToString("N"));
     var key = rsa.Create(id);
-    store.Save(key);
-    return Results.Json(KeyResponse(request, key));
+    try
+    {
+        store.Save(key);
+        return Results.Json(KeyResponse(request, key));
+    }
+    catch (KeyAlreadyExistsException)
+    {
+        return Results.Conflict(new { error = new { code = "KeyAlreadyExists", message = "A key with the requested name already exists." } });
+    }
 });
 
 app.MapGet("/keys/{name}/{version}", (string name, string version, HttpRequest request, BootstrapKmsOptions configured, LocalOidcService oidc, SqliteRsaKeyStore store) =>
@@ -144,6 +151,10 @@ static IResult Unauthorized(HttpRequest request, BootstrapKmsOptions options, Lo
     request.HttpContext.Response.Headers.WWWAuthenticate = $"Bearer authorization=\"{oidc.Issuer(request)}\", resource=\"https://vault.azure.net\"";
     return Results.Unauthorized();
 }
+
+static bool IsValidKeyName(string name)
+    => name.Length is >= 1 and <= 127
+       && name.All(character => char.IsAsciiLetterOrDigit(character) || character == '-');
 
 static object KeyResponse(HttpRequest request, StoredRsaKey key) => new
 {

@@ -36,4 +36,28 @@ public sealed class SqliteRsaKeyStoreTests
             }
         }
     }
+
+    [Fact]
+    public void Store_rejects_a_second_key_version_for_the_same_name()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"kms-state-{Guid.NewGuid():N}.sqlite");
+        try
+        {
+            var tenant = new TenantId(Guid.NewGuid());
+            var service = new RsaKeyService(new AesGcmKeyProtector(RandomNumberGenerator.GetBytes(32)));
+            using (var store = new SqliteRsaKeyStore(path))
+            {
+                store.Save(service.Create(new KmsKeyId(tenant, "development", "always-encrypted", "first")));
+
+                Assert.Throws<KeyAlreadyExistsException>(() => store.Save(service.Create(new KmsKeyId(tenant, "development", "always-encrypted", "second"))));
+            }
+        }
+        finally
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+    }
 }

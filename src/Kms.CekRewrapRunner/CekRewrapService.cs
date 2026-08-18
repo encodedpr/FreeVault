@@ -42,7 +42,9 @@ public sealed class CekRewrapService
         {
             SqlConnection.ColumnEncryptionKeyCacheTtl = TimeSpan.Zero;
             StartupHook.Initialize();
-            var freeVaultProvider = KmsAzureKeyVaultProviderFactory.Create(KmsClientCredentialsOptions.FromEnvironment());
+            var credentials = KmsClientCredentialsOptions.FromEnvironment();
+            CekRewrapPolicy.EnsureKeyUrlMatchesEndpoint(options.FreeVaultKeyUrl, credentials.Endpoint);
+            var freeVaultProvider = KmsAzureKeyVaultProviderFactory.Create(credentials);
             var freeVaultEncryptedCek = freeVaultProvider.EncryptColumnEncryptionKey(
                 options.FreeVaultKeyUrl.AbsoluteUri,
                 CekRewrapPolicy.SqlClientCekAlgorithm,

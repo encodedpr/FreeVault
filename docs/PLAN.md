@@ -9,8 +9,8 @@ managed production key-management service.
 
 ## Phase Zero — complete the Always Encrypted vertical slice
 
-**Acceptance outcome:** a disposable SQL Server clone can use a version-pinned
-FreeVault RSA CMK through the standard `AZURE_KEY_VAULT` SqlClient provider,
+**Acceptance outcome:** a disposable SQL Server clone can use an immutable,
+pinned FreeVault RSA CMK URL through the standard `AZURE_KEY_VAULT` SqlClient provider,
 without a file-backed CEK provider or a mounted/generated PFX.
 
 1. **Finish Azure Key Vault compatibility**
@@ -21,8 +21,8 @@ without a file-backed CEK provider or a mounted/generated PFX.
      `RSA-OAEP-256` for the native API contract.
 
 2. **Deliver the CEK rewrap runner**
-   - Add a Windows-oriented command-line runner using the bridge and a
-     version-pinned KMS CMK.
+   - Add a Windows-oriented command-line runner using the bridge and a pinned
+     KMS CMK URL.
    - Refuse equal source/destination database names.
    - Read source CEK material only in memory, alter only a disposable
      destination clone, validate a transparent encrypted read, then remove

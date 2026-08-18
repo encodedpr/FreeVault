@@ -1,7 +1,7 @@
 # FreeVault CEK Rewrap Migration
 
 FreeVault Phase Zero moves a CEK in a disposable SQL Server clone from the
-Windows certificate-store provider to a version-pinned FreeVault RSA key. It
+Windows certificate-store provider to an immutable FreeVault RSA key URL. It
 uses the official SqlClient `AZURE_KEY_VAULT` provider and does not generate,
 mount, or register a PFX provider.
 
@@ -9,7 +9,7 @@ mount, or register a PFX provider.
 
 `Kms.CekRewrapRunner` is a Windows-oriented FreeVault console component. It
 receives the source and destination database names, CEK name, source CMK name,
-destination CMK name, and a version-pinned FreeVault key URL. Its connection
+destination CMK name, and an immutable FreeVault key URL. Its connection
 template and bridge credentials are environment-only inputs.
 
 The destination clone must already exist. Clone creation, backup, restore, and
@@ -22,7 +22,7 @@ selection of the source database remain operator-controlled deployment work.
    certificate-store provider.
 3. Decrypt that CEK only in process memory.
 4. Create destination CMK metadata using `AZURE_KEY_VAULT` and the supplied
-   version-pinned FreeVault key URL.
+   immutable FreeVault key URL (`https://<host>/keys/<name>/<creation-id>`).
 5. Encrypt the CEK through the FreeVault bridge, add the new destination CEK
    value, and verify a transparent randomized encrypted-column read bound to
    the requested CEK.
@@ -50,6 +50,23 @@ FreeVault endpoint trusted by its container and no PFX file.
 `bootstrap-client-secret.txt` runtime files. Generated staging, package
 scratch, PFX material, and legacy validation files are not FreeVault runtime
 dependencies.
+
+## Operator prerequisites
+
+Use a separate, freshly restored destination clone and never run the runner
+against the source catalog. Start FreeVault on loopback first, then place an
+HTTPS terminator in front of it for the runner and Linux probe. The key URL is
+immutable because SqlClient requires a pinned path. Phase Zero creates one
+creation ID per name and has no rotation workflow; do not delete or reset the
+FreeVault state after SQL metadata has been migrated.
+
+The runner fails closed unless the key URL's scheme, host, and port exactly
+match `KMS_AE_ENDPOINT`; this prevents the configured credential endpoint and
+the CMK metadata path from diverging.
+
+For a failed rewrap, stop and discard the destination clone. Restore a fresh
+clone, correct the configuration or TLS problem, and begin again. Do not retry
+DDL against the partial clone.
 
 ## Dependency policy
 

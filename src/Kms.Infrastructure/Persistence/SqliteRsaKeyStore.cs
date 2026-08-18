@@ -44,6 +44,18 @@ public sealed class SqliteRsaKeyStore : IDisposable
     {
         lock (_gate)
         {
+        using (var existingKey = _connection.CreateCommand())
+        {
+            existingKey.CommandText = "SELECT 1 FROM rsa_key_versions WHERE tenant_id = $tenantId AND vault_name = $vault AND key_name = $name LIMIT 1;";
+            existingKey.Parameters.AddWithValue("$tenantId", key.KeyId.TenantId.Value.ToString("D"));
+            existingKey.Parameters.AddWithValue("$vault", key.KeyId.Vault);
+            existingKey.Parameters.AddWithValue("$name", key.KeyId.Name);
+            if (existingKey.ExecuteScalar() is not null)
+            {
+                throw new KeyAlreadyExistsException(key.KeyId.Name);
+            }
+        }
+
         using var command = _connection.CreateCommand();
         command.CommandText = """
             INSERT INTO rsa_key_versions (
@@ -124,4 +136,12 @@ public sealed class SqliteRsaKeyStore : IDisposable
 
     private static byte[] ReadBlob(SqliteDataReader reader, int ordinal)
         => (byte[])reader.GetValue(ordinal);
+}
+
+public sealed class KeyAlreadyExistsException : InvalidOperationException
+{
+    public KeyAlreadyExistsException(string name)
+        : base($"A KMS key named '{name}' already exists.")
+    {
+    }
 }

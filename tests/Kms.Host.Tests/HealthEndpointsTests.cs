@@ -120,7 +120,7 @@ public sealed class KeyVaultKeyApiTests
     }
 
     [Fact]
-    public async Task Client_credentials_token_can_create_a_versioned_rsa_key_through_the_key_vault_contract()
+    public async Task Client_credentials_token_can_create_and_use_a_stable_rsa_key_through_the_key_vault_contract()
     {
         using var tokenRequest = new HttpRequestMessage(HttpMethod.Post, $"/{_factory.TenantId:D}/oauth2/v2.0/token")
         {
@@ -214,6 +214,46 @@ public sealed class KeyVaultKeyApiTests
         decryptResponse.EnsureSuccessStatusCode();
         using var decryptDocument = JsonDocument.Parse(await decryptResponse.Content.ReadAsStringAsync());
         Assert.Equal(cek, Base64UrlDecode(decryptDocument.RootElement.GetProperty("value").GetString()!));
+
+        using var duplicateResponse = await _client.PostAsJsonAsync("/keys/always-encrypted/create?api-version=7.4", new
+        {
+            kty = "RSA",
+            key_size = 3072,
+            key_ops = new[] { "wrapKey", "unwrapKey", "sign", "verify" },
+        });
+        Assert.Equal(HttpStatusCode.Conflict, duplicateResponse.StatusCode);
+
+        Assert.Equal(HttpStatusCode.NotFound, (await _client.GetAsync("/keys/always-encrypted/legacy-version")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Versioned_key_route_rejects_a_missing_bearer_token()
+    {
+        var response = await _client.GetAsync("/keys/always-encrypted/not-a-real-version");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Create_rejects_a_key_name_outside_the_day_one_contract()
+    {
+        using var tokenRequest = new HttpRequestMessage(HttpMethod.Post, $"/{_factory.TenantId:D}/oauth2/v2.0/token")
+        {
+            Content = new FormUrlEncodedContent(new Dictionary<string, string>
+            {
+                ["grant_type"] = "client_credentials",
+                ["client_id"] = _factory.ClientId,
+                ["client_secret"] = _factory.ClientSecret,
+                ["scope"] = "https://vault.azure.net/.default",
+            }),
+        };
+        using var tokenResponse = await _client.SendAsync(tokenRequest);
+        using var tokenDocument = JsonDocument.Parse(await tokenResponse.Content.ReadAsStringAsync());
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokenDocument.RootElement.GetProperty("access_token").GetString());
+
+        using var response = await _client.PostAsJsonAsync("/keys/invalid%20name/create", new { });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     private static string Base64UrlEncode(byte[] value)

@@ -8,6 +8,6 @@ public static class KmsAzureKeyVaultProviderFactory
     {
         options.Validate();
         var credential = new KmsClientCredentialsTokenCredential(options);
-        return new SqlColumnEncryptionAzureKeyVaultProvider(credential, options.Endpoint.GetLeftPart(UriPartial.Authority));
+        return new SqlColumnEncryptionAzureKeyVaultProvider(credential, options.Endpoint.Host);
     }
 }

@@ -17,16 +17,17 @@ those libraries do not provide the required orchestration.
 
 Phase Zero currently includes:
 
-- Encrypted, versioned RSA-3072 key persistence backed by SQLite and a 32-byte
-  root key.
+- Encrypted RSA-3072 persistence backed by SQLite and a 32-byte root key.
+  Phase Zero creates one immutable provider-required key version per name and
+  has no rotation, listing, or replacement workflow.
 - Local client-credentials tokens, OIDC discovery, JWKS, and authenticated
   Key Vault-style key operations.
 - `get`, `wrapkey`, `unwrapkey`, `encrypt`, `decrypt`, `sign`, and `verify`.
 - The official Microsoft SqlClient `AZURE_KEY_VAULT` provider through
   `Kms.AlwaysEncryptedBridge`; no custom SQL key-store provider is used.
 - `Kms.CekRewrapRunner`, a Windows-side migration utility that moves a CEK in
-  a disposable SQL clone from the Windows certificate store to a version-pinned
-  FreeVault CMK.
+  a disposable SQL clone from the Windows certificate store to an immutable
+  FreeVault CMK URL.
 - A PFX-free Linux Always Encrypted probe and rootless Docker images.
 
 FreeVault is a software cryptography emulator. It is not a physical HSM,
@@ -44,6 +45,16 @@ The image `freevault-kms:phase-zero` runs the KMS as an unprivileged user. Its
 Compose configuration mounts the root key read-only and persists only encrypted
 SQLite state. The provider bridge requires an HTTPS KMS endpoint; terminate TLS
 before using it with an Always Encrypted application.
+
+## Start locally
+
+FreeVault's supplied Compose setup is intentionally local-only: it publishes
+`127.0.0.1:8080`, not a LAN address. The short PowerShell setup, stable key
+creation, CEK rewrap, Linux probe, backup, reset, and TLS guidance are in the
+[Phase Zero runbook](docs/KMS-PHASE-ZERO.md). The official SqlClient provider
+requires a pinned key URL in the form
+`https://<freevault-host>/keys/<key-name>/<creation-id>`; Phase Zero creates
+only one such ID per name and rejects replacement.
 
 ## Project status
 

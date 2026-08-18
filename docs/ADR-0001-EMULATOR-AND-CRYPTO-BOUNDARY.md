@@ -11,8 +11,10 @@ is the Azure Key Vault Keys HTTP contract plus the credential flow expected by
 the official SqlClient Azure Key Vault provider.
 
 The project must be Linux and Docker friendly, must not depend on a PFX-backed
-Always Encrypted key-store provider, and must not implement cryptographic
-primitives itself.
+Always Encrypted key-store provider, must not implement cryptographic
+primitives itself. The official SqlClient provider requires a pinned key URL,
+so Phase Zero creates one immutable key version per name but exposes no
+rotation, listing, or replacement workflow.
 
 ## Decision
 
@@ -44,7 +46,7 @@ disposable-clone CEK rewrap workflow.
    The platform and official provider already implement these sensitive,
    interoperable concerns.
 3. **Use a PFX file/provider for Always Encrypted.** Rejected. The Phase Zero
-   migration moves the destination CEK under a version-pinned FreeVault CMK;
+   migration moves the destination CEK under an immutable FreeVault CMK URL;
    TLS certificates, if configured, are transport concerns rather than CEK
    storage.
 
@@ -55,7 +57,7 @@ Linux where applicable:
 
 - the official SqlClient Azure Key Vault provider can use it with the
   FreeVault trusted endpoint and credential flow;
-- version-pinned key URLs and the SQL CEK `RSA_OAEP` envelope work;
+- pinned key URLs and the SQL CEK `RSA_OAEP` envelope work;
 - persistent encrypted key state and root-key handling meet the local model;
 - the no-PFX-backed-provider policy is preserved; and
 - a Windows disposable SQL clone can be rewrapped and transparently read by

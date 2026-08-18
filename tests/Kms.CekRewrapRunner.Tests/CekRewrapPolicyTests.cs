@@ -36,4 +36,22 @@ public sealed class CekRewrapPolicyTests
             new DatabaseIdentity("sql-host", 7, "Source"),
             new DatabaseIdentity("sql-host", 8, "Destination"));
     }
+
+    [Fact]
+    public void EnsureKeyUrlMatchesEndpoint_rejects_a_different_https_origin()
+    {
+        var exception = Assert.Throws<InvalidOperationException>(() => CekRewrapPolicy.EnsureKeyUrlMatchesEndpoint(
+            new Uri("https://freevault.test:8443/keys/always-encrypted/0123456789abcdef0123456789abcdef"),
+            new Uri("https://freevault.test:9443")));
+
+        Assert.Contains("origin", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void EnsureKeyUrlMatchesEndpoint_accepts_the_configured_https_origin()
+    {
+        CekRewrapPolicy.EnsureKeyUrlMatchesEndpoint(
+            new Uri("https://freevault.test:8443/keys/always-encrypted/0123456789abcdef0123456789abcdef"),
+            new Uri("https://freevault.test:8443"));
+    }
 }

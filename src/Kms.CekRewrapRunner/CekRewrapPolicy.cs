@@ -22,6 +22,14 @@ internal static class CekRewrapPolicy
             throw new InvalidOperationException("The source and destination resolve to the same catalog.");
         }
     }
+
+    public static void EnsureKeyUrlMatchesEndpoint(Uri keyUrl, Uri endpoint)
+    {
+        if (Uri.Compare(keyUrl, endpoint, UriComponents.SchemeAndServer, UriFormat.Unescaped, StringComparison.OrdinalIgnoreCase) != 0)
+        {
+            throw new InvalidOperationException("The FreeVault key URL origin must match KMS_AE_ENDPOINT.");
+        }
+    }
 }
 
 internal sealed record DatabaseIdentity(string ServerName, int DatabaseId, string DatabaseName);

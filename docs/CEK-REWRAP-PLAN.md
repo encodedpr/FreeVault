@@ -31,7 +31,7 @@ host, bridge, and `Kms.AeProbe` retain their current responsibility boundaries.
 files, and `Kms.slnx`.
 
 1. Add failing tests for required named arguments, unequal database names,
-   a version-pinned HTTPS FreeVault key URL, SQL identifier quoting, and
+   a stable HTTPS FreeVault key URL (`/keys/{name}`), SQL identifier quoting, and
    `SqlConnectionStringBuilder` catalog replacement.
 2. Run the focused test project and confirm that the runner types are absent.
 3. Implement immutable `RewrapOptions` parsing plus static SQL safety helpers.
