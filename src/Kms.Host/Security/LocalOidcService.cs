@@ -1,3 +1,4 @@
+using Kms.Domain.Authorization;
 using Kms.Domain.Keys;
 using Kms.Domain.Tenancy;
 using Kms.Infrastructure.Keys;
@@ -42,7 +43,6 @@ public sealed class LocalOidcService
             sub = _options.ClientId,
             azp = _options.ClientId,
             tid = _options.TenantId.ToString("D"),
-            roles = new[] { "kms.admin" },
             iat = now.ToUnixTimeSeconds(),
             nbf = now.ToUnixTimeSeconds(),
             exp = now.AddMinutes(10).ToUnixTimeSeconds(),
@@ -53,7 +53,11 @@ public sealed class LocalOidcService
     }
 
     public bool IsAuthorized(HttpRequest request)
+        => TryGetPrincipal(request, out _);
+
+    public bool TryGetPrincipal(HttpRequest request, out KmsPrincipal? principal)
     {
+        principal = null;
         var authorization = request.Headers.Authorization.ToString();
         if (!authorization.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
         {
@@ -71,9 +75,11 @@ public sealed class LocalOidcService
             using var payloadDocument = JsonDocument.Parse(Base64UrlDecode(parts[1]));
             var payload = payloadDocument.RootElement;
             var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            var clientId = payload.GetProperty("azp").GetString();
             if (payload.GetProperty("iss").GetString() != Issuer(request)
                 || payload.GetProperty("aud").GetString() != "https://vault.azure.net"
                 || payload.GetProperty("tid").GetString() != _options.TenantId.ToString("D")
+                || string.IsNullOrWhiteSpace(clientId)
                 || payload.GetProperty("exp").GetInt64() <= now)
             {
                 return false;
@@ -81,10 +87,16 @@ public sealed class LocalOidcService
 
             var signingKey = GetSigningKey();
             var signedContent = $"{parts[0]}.{parts[1]}";
-            return _rsa.Verify(
+            var verified = _rsa.Verify(
                 signingKey,
                 SHA256.HashData(Encoding.ASCII.GetBytes(signedContent)),
                 Base64UrlDecode(parts[2]));
+            if (verified)
+            {
+                principal = new KmsPrincipal(new TenantId(_options.TenantId), clientId);
+            }
+
+            return verified;
         }
         catch (Exception exception) when (exception is ArgumentException or CryptographicException or JsonException or KeyNotFoundException)
         {

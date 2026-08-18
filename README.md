@@ -15,13 +15,15 @@ standard Docker/.NET tooling. Custom code is limited to the local Azure Key
 Vault compatibility surface and the disposable-clone CEK migration flow where
 those libraries do not provide the required orchestration.
 
-Phase Zero currently includes:
+Current capabilities include:
 
 - Encrypted, single-active-key RSA-3072 persistence backed by SQLite and a
   32-byte root key. Phase Zero has no key versions or rotation.
-- Local client-credentials tokens, OIDC discovery, JWKS, and authenticated
-  Key Vault-style key operations.
-- `get`, `wrapkey`, `unwrapkey`, `encrypt`, `decrypt`, `sign`, and `verify`.
+- Local client-credentials tokens, OIDC discovery, JWKS, persisted bootstrap
+  grants, and operation-only audit records.
+- `create`, `get`, `list`, enabled-state update, and soft delete for stable,
+  non-versioned RSA keys; plus `wrapkey`, `unwrapkey`, `encrypt`, `decrypt`,
+  `sign`, and `verify`. Disabled keys cannot perform cryptographic operations.
 - The official Microsoft SqlClient `AZURE_KEY_VAULT` provider through
   `Kms.AlwaysEncryptedBridge`; no custom SQL key-store provider is used.
 - `Kms.CekRewrapRunner`, a Windows-side migration utility that moves a CEK in
@@ -53,6 +55,13 @@ creation, CEK rewrap, Linux probe, backup, reset, and TLS guidance are in the
 [Phase Zero runbook](docs/KMS-PHASE-ZERO.md). A key URL is always
 `https://<freevault-host>/keys/<key-name>`; creating the same name again is
 rejected rather than replacing its key material.
+
+The supported general Keys surface requires `api-version=7.4`. FreeVault is a
+self-hosted endpoint, not an Azure Key Vault domain: an application using the
+official `Azure.Security.KeyVault.Keys` client must explicitly pin the
+FreeVault URI and set `DisableChallengeResourceVerification = true`. Do this
+only for a configured localhost or otherwise trusted FreeVault URI; never use
+it with a caller-supplied endpoint.
 
 ## Project status
 

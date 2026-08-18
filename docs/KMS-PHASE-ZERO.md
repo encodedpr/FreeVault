@@ -6,8 +6,10 @@
   each key has a random AES-256-GCM DEK, itself AES-256-GCM wrapped by a
   32-byte root key. Phase Zero has no key rotation or versions.
 - Local client-credentials token endpoint, signed access tokens, OIDC discovery,
-  JWKS, and authenticated Key Vault-style key routes.
-- `get`, `wrapkey`, `unwrapkey`, `encrypt`, `decrypt`, `sign`, and `verify`.
+  JWKS, persisted bootstrap-client grants, and operation-only audit records.
+- `create`, `get`, `list`, enabled-state update, and soft delete for stable,
+  non-versioned RSA keys; plus `wrapkey`, `unwrapkey`, `encrypt`, `decrypt`,
+  `sign`, and `verify`. A disabled key rejects crypto operations.
 - `RSA-OAEP-256` for the FreeVault API, plus `RSA-OAEP` strictly for
   compatibility with the Microsoft SqlClient Always Encrypted provider.
 - `Kms.AlwaysEncryptedBridge`, which uses the standard
@@ -29,6 +31,7 @@ KMS_STATE_PATH
 KMS_BOOTSTRAP_TENANT_ID
 KMS_BOOTSTRAP_CLIENT_ID
 KMS_BOOTSTRAP_CLIENT_SECRET_FILE
+KMS_BOOTSTRAP_KEY_PERMISSIONS (optional; comma-separated exact permissions)
 ```
 
 The bridge/probe additionally require:
@@ -59,6 +62,15 @@ KMS_AE_SQL_FREEVAULT_KEY_URL
 the KMS only on loopback for local health/API work; place a TLS terminator in
 front of it before using the Always Encrypted bridge.
 
+`KMS_BOOTSTRAP_KEY_PERMISSIONS` controls the persisted permissions granted to
+the bootstrap client at startup. When omitted, all currently supported Keys
+permissions are granted for local development. For an integration environment,
+set only the permissions the client requires: `create`, `get`, `list`,
+`update`, `delete`, `wrapKey`, `unwrapKey`, `encrypt`, `decrypt`, `sign`, and
+`verify`. The audit database records only timestamp, tenant, caller, key name,
+operation, and outcome; it never stores key material, operation values, tokens,
+client secrets, SQL text, or connection strings.
+
 ## Container build
 
 ```powershell
@@ -83,6 +95,7 @@ New-Item -ItemType Directory -Force local | Out-Null
 icacls local /inheritance:r /grant:r "$env:USERNAME:(OI)(CI)F"
 $env:KMS_BOOTSTRAP_TENANT_ID = [Guid]::NewGuid().ToString('D')
 $env:KMS_BOOTSTRAP_CLIENT_ID = 'freevault-local'
+$env:KMS_BOOTSTRAP_KEY_PERMISSIONS = 'create,get,list,update,delete,wrapKey,unwrapKey,encrypt,decrypt,sign,verify'
 docker compose -f docker/docker-compose.kms.yml up --build -d
 Invoke-RestMethod http://127.0.0.1:8080/health/live
 Invoke-RestMethod http://127.0.0.1:8080/health/ready
@@ -111,6 +124,30 @@ $key.key.kid
 Creating `always-encrypted` again returns `409 KeyAlreadyExists`; Phase Zero
 will never silently replace the key behind a CEK. Do not reset the state or
 root key once a clone has been rewrapped against this key.
+
+## General Keys client use
+
+FreeVault requires `api-version=7.4` on supported Keys routes. Its stable key
+URLs intentionally omit a key version. The official `Azure.Security.KeyVault.Keys`
+client can manage the supported RSA surface when it is configured for the fixed
+FreeVault endpoint. Because `127.0.0.1` is not an Azure Key Vault domain, the
+SDK's challenge-resource domain check must be disabled for this one configured
+endpoint. Do not use this setting with user-supplied or untrusted URLs.
+
+```csharp
+var vaultUri = new Uri("https://localhost:8443"); // fixed, trusted FreeVault URI
+var options = new KeyClientOptions(KeyClientOptions.ServiceVersion.V7_4)
+{
+    DisableChallengeResourceVerification = true,
+};
+var keys = new KeyClient(vaultUri, credential, options);
+```
+
+Supported management calls are RSA create, get, list, enabled-state update,
+and soft delete. Delete removes the key from normal reads and crypto operations
+without creating a version. Recover, purge, key versions, rotation,
+backup/restore, import/export, EC/AES keys, secrets, and certificates are not
+available yet and must not be relied upon.
 
 ## Always Encrypted validation boundary
 
@@ -157,5 +194,5 @@ For any CEK rewrap failure, discard the destination SQL clone rather than
 resetting the KMS that may be protecting other test clones.
 
 Scheduled rotation, replacement workflows, EC keys, secrets, certificates,
-backup/restore, multi-client role administration, and physical-HSM integration
-remain later phases.
+backup/restore, runtime multi-client administration, and physical-HSM
+integration remain later phases.

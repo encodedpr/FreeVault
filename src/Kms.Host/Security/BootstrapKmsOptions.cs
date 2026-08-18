@@ -1,3 +1,4 @@
+using Kms.Domain.Authorization;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -9,6 +10,7 @@ public sealed class BootstrapKmsOptions
     public required string ClientId { get; init; }
     public required string ClientSecret { get; init; }
     public required string StatePath { get; init; }
+    public required IReadOnlySet<KeyPermission> KeyPermissions { get; init; }
 
     public static BootstrapKmsOptions Load(IConfiguration configuration)
     {
@@ -43,6 +45,7 @@ public sealed class BootstrapKmsOptions
             ClientId = clientId,
             ClientSecret = clientSecret,
             StatePath = Path.GetFullPath(statePath),
+            KeyPermissions = LoadPermissions(configuration["KMS_BOOTSTRAP_KEY_PERMISSIONS"]),
         };
     }
 
@@ -56,5 +59,31 @@ public sealed class BootstrapKmsOptions
         return CryptographicOperations.FixedTimeEquals(
             Encoding.UTF8.GetBytes(ClientSecret),
             Encoding.UTF8.GetBytes(clientSecret));
+    }
+
+    private static IReadOnlySet<KeyPermission> LoadPermissions(string? configuredPermissions)
+    {
+        if (string.IsNullOrWhiteSpace(configuredPermissions))
+        {
+            return Enum.GetValues<KeyPermission>().ToHashSet();
+        }
+
+        var permissions = new HashSet<KeyPermission>();
+        foreach (var value in configuredPermissions.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (!KeyAuthorizationNames.TryParsePermission(value, out var permission))
+            {
+                throw new InvalidOperationException($"KMS_BOOTSTRAP_KEY_PERMISSIONS contains unsupported permission '{value}'.");
+            }
+
+            permissions.Add(permission);
+        }
+
+        if (permissions.Count == 0)
+        {
+            throw new InvalidOperationException("KMS_BOOTSTRAP_KEY_PERMISSIONS must contain at least one permission.");
+        }
+
+        return permissions;
     }
 }

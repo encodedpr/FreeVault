@@ -28,7 +28,8 @@ public sealed class RsaKeyService
                     ["n"] = Base64UrlEncode(publicParameters.Modulus!),
                     ["e"] = Base64UrlEncode(publicParameters.Exponent!),
                 },
-                rsa.KeySize);
+                rsa.KeySize,
+                Enabled: true);
         }
         finally
         {

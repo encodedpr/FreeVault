@@ -40,19 +40,20 @@ without a file-backed CEK provider or a mounted/generated PFX.
 
 ## Phase One — general Keys service
 
-- Require `api-version=7.4` on supported Keys routes.
-- Persist tenants, clients, role grants, and operation-only audit events.
-- Replace the bootstrap-admin shortcut with exact tenant-scoped permissions for
-  key creation, read, wrap/unwrap, sign, and verify.
-- Record no private keys, CEKs, access tokens, client secrets, SQL text, or
-  connection strings in logs or audit data.
-- Key lists, create/get/update/delete semantics, disabled-state enforcement,
-  and immutable version history.
+- Require `api-version=7.4` on supported Keys routes and verify the supported
+  surface through the official Azure Keys client.
+- Persist bootstrap client records, exact tenant-scoped grants, and
+  operation-only audit events; never record private keys, CEKs, access tokens,
+  client secrets, SQL text, or connection strings.
+- Stable non-versioned RSA create/get/list/update/soft-delete semantics and
+  disabled-state enforcement. Creating an existing name remains a conflict;
+  the emulator must never silently replace its key material.
+- Add runtime multi-client and tenant administration only with least-privilege
+  role management and audit query/retention controls.
 - Import and export boundaries that never expose private key material.
-- Key rotation policies, activation/expiry metadata, explicit replacement, and
-  CEK rewrap orchestration rather than implicit CMK switching.
-- Multiple clients, tenant administration APIs, least-privilege roles, and
-  audit query/retention controls.
+- Version history, rotation policies, activation/expiry metadata, explicit
+  replacement, and CEK rewrap orchestration rather than implicit CMK switching
+  are deliberately deferred until non-versioned use is proven.
 
 ## Phase Two — operations and interoperability
 
