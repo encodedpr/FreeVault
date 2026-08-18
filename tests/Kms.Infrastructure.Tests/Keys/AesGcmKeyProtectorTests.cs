@@ -12,7 +12,7 @@ public sealed class AesGcmKeyProtectorTests
     {
         var rootKey = RandomNumberGenerator.GetBytes(32);
         var protector = new AesGcmKeyProtector(rootKey);
-        var keyId = new KmsKeyId(new TenantId(Guid.NewGuid()), "development", "always-encrypted", "version-1");
+        var keyId = new KmsKeyId(new TenantId(Guid.NewGuid()), "development", "always-encrypted");
         var privateMaterial = RandomNumberGenerator.GetBytes(256);
 
         var encrypted = protector.Protect(keyId, privateMaterial);
@@ -26,7 +26,7 @@ public sealed class AesGcmKeyProtectorTests
     {
         var protector = new AesGcmKeyProtector(RandomNumberGenerator.GetBytes(32));
         var encrypted = protector.Protect(
-            new KmsKeyId(new TenantId(Guid.NewGuid()), "development", "always-encrypted", "version-1"),
+            new KmsKeyId(new TenantId(Guid.NewGuid()), "development", "always-encrypted"),
             RandomNumberGenerator.GetBytes(64));
 
         var rebound = encrypted with

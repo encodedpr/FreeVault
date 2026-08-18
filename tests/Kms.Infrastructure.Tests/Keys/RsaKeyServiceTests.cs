@@ -11,7 +11,7 @@ public sealed class RsaKeyServiceTests
     public void Rsa3072_key_wraps_unwraps_signs_and_verifies_without_exporting_private_material()
     {
         var service = new RsaKeyService(new AesGcmKeyProtector(RandomNumberGenerator.GetBytes(32)));
-        var keyId = new KmsKeyId(new TenantId(Guid.NewGuid()), "development", "always-encrypted", Guid.NewGuid().ToString("N"));
+        var keyId = new KmsKeyId(new TenantId(Guid.NewGuid()), "development", "always-encrypted");
         var key = service.Create(keyId);
         var cek = RandomNumberGenerator.GetBytes(32);
         var digest = SHA256.HashData(cek);
@@ -51,5 +51,5 @@ public sealed class RsaKeyServiceTests
     }
 
     private static KmsKeyId KeyId()
-        => new(new TenantId(Guid.NewGuid()), "development", "always-encrypted", Guid.NewGuid().ToString("N"));
+        => new(new TenantId(Guid.NewGuid()), "development", "always-encrypted");
 }

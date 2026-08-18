@@ -62,7 +62,7 @@ public sealed class KmsAzureKeyVaultProviderFactoryTests
     }
 
     [Fact]
-    public void Official_provider_accepts_the_phase_zero_pinned_key_url_before_token_acquisition()
+    public void Official_provider_accepts_the_phase_zero_stable_key_url_before_token_acquisition()
     {
         var secretFile = Path.GetTempFileName();
         try
@@ -76,7 +76,7 @@ public sealed class KmsAzureKeyVaultProviderFactoryTests
             var provider = KmsAzureKeyVaultProviderFactory.Create(options);
 
             var exception = Record.Exception(() => provider.EncryptColumnEncryptionKey(
-                "https://127.0.0.1:1/keys/always-encrypted/0123456789abcdef0123456789abcdef",
+                "https://127.0.0.1:1/keys/always-encrypted",
                 "RSA_OAEP",
                 RandomNumberGenerator.GetBytes(32)));
 

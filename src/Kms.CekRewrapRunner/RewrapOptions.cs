@@ -29,7 +29,7 @@ public sealed record RewrapOptions(
             Required(values, "--cek-name"),
             Required(values, "--source-cmk-name"),
             Required(values, "--destination-cmk-name"),
-            VersionPinnedKeyUrl(Required(values, "--freevault-key-url")));
+            StableKeyUrl(Required(values, "--freevault-key-url")));
 
         if (string.Equals(options.SourceDatabase, options.DestinationDatabase, StringComparison.OrdinalIgnoreCase))
         {
@@ -64,7 +64,7 @@ public sealed record RewrapOptions(
             ? value
             : throw new ArgumentException($"{name} is required.");
 
-    private static Uri VersionPinnedKeyUrl(string value)
+    private static Uri StableKeyUrl(string value)
     {
         if (!Uri.TryCreate(value, UriKind.Absolute, out var url)
             || !string.Equals(url.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)
@@ -72,14 +72,14 @@ public sealed record RewrapOptions(
             || url.Query.Length != 0
             || url.Fragment.Length != 0)
         {
-            throw new ArgumentException("The FreeVault key URL must be an absolute version-pinned HTTPS URL without credentials.", nameof(value));
+            throw new ArgumentException("The FreeVault key URL must be an absolute HTTPS URL without credentials.", nameof(value));
         }
 
         var segments = url.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
-        if (segments.Length != 3 || !string.Equals(segments[0], "keys", StringComparison.OrdinalIgnoreCase)
-            || string.IsNullOrWhiteSpace(segments[1]) || string.IsNullOrWhiteSpace(segments[2]))
+        if (segments.Length != 2 || !string.Equals(segments[0], "keys", StringComparison.OrdinalIgnoreCase)
+            || string.IsNullOrWhiteSpace(segments[1]))
         {
-            throw new ArgumentException("The FreeVault key URL must be version-pinned as /keys/{name}/{version}.", nameof(value));
+            throw new ArgumentException("The FreeVault key URL must be /keys/{name}.", nameof(value));
         }
 
         return url;

@@ -19,13 +19,22 @@ public sealed class SqliteRsaKeyStore : IDisposable
             Pooling = false,
         }.ToString());
         _connection.Open();
+        using (var legacyStateCheck = _connection.CreateCommand())
+        {
+            legacyStateCheck.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'rsa_key_versions';";
+            if (Convert.ToInt64(legacyStateCheck.ExecuteScalar()) != 0)
+            {
+                _connection.Dispose();
+                throw new InvalidOperationException("A legacy versioned FreeVault state database was found. Reset the developer state before starting this non-versioned Phase Zero build.");
+            }
+        }
+
         using var command = _connection.CreateCommand();
         command.CommandText = """
-            CREATE TABLE IF NOT EXISTS rsa_key_versions (
+            CREATE TABLE IF NOT EXISTS rsa_keys (
                 tenant_id TEXT NOT NULL,
                 vault_name TEXT NOT NULL,
                 key_name TEXT NOT NULL,
-                key_version TEXT NOT NULL,
                 public_jwk TEXT NOT NULL,
                 key_size INTEGER NOT NULL,
                 ciphertext BLOB NOT NULL,
@@ -34,7 +43,7 @@ public sealed class SqliteRsaKeyStore : IDisposable
                 wrapped_dek BLOB NOT NULL,
                 wrapped_dek_nonce BLOB NOT NULL,
                 wrapped_dek_tag BLOB NOT NULL,
-                PRIMARY KEY (tenant_id, vault_name, key_name, key_version)
+                PRIMARY KEY (tenant_id, vault_name, key_name)
             );
             """;
         command.ExecuteNonQuery();
@@ -44,30 +53,17 @@ public sealed class SqliteRsaKeyStore : IDisposable
     {
         lock (_gate)
         {
-        using (var existingKey = _connection.CreateCommand())
-        {
-            existingKey.CommandText = "SELECT 1 FROM rsa_key_versions WHERE tenant_id = $tenantId AND vault_name = $vault AND key_name = $name LIMIT 1;";
-            existingKey.Parameters.AddWithValue("$tenantId", key.KeyId.TenantId.Value.ToString("D"));
-            existingKey.Parameters.AddWithValue("$vault", key.KeyId.Vault);
-            existingKey.Parameters.AddWithValue("$name", key.KeyId.Name);
-            if (existingKey.ExecuteScalar() is not null)
-            {
-                throw new KeyAlreadyExistsException(key.KeyId.Name);
-            }
-        }
-
         using var command = _connection.CreateCommand();
         command.CommandText = """
-            INSERT INTO rsa_key_versions (
-                tenant_id, vault_name, key_name, key_version, public_jwk, key_size,
+            INSERT INTO rsa_keys (
+                tenant_id, vault_name, key_name, public_jwk, key_size,
                 ciphertext, ciphertext_nonce, ciphertext_tag, wrapped_dek, wrapped_dek_nonce, wrapped_dek_tag)
-            VALUES ($tenantId, $vault, $name, $version, $publicJwk, $keySize,
+            VALUES ($tenantId, $vault, $name, $publicJwk, $keySize,
                 $ciphertext, $ciphertextNonce, $ciphertextTag, $wrappedDek, $wrappedDekNonce, $wrappedDekTag);
             """;
         command.Parameters.AddWithValue("$tenantId", key.KeyId.TenantId.Value.ToString("D"));
         command.Parameters.AddWithValue("$vault", key.KeyId.Vault);
         command.Parameters.AddWithValue("$name", key.KeyId.Name);
-        command.Parameters.AddWithValue("$version", key.KeyId.Version);
         command.Parameters.AddWithValue("$publicJwk", JsonSerializer.Serialize(key.PublicJwk));
         command.Parameters.AddWithValue("$keySize", key.KeySize);
         AddBlob(command, "$ciphertext", key.EncryptedPrivateMaterial.Ciphertext);
@@ -76,7 +72,14 @@ public sealed class SqliteRsaKeyStore : IDisposable
         AddBlob(command, "$wrappedDek", key.EncryptedPrivateMaterial.WrappedDek);
         AddBlob(command, "$wrappedDekNonce", key.EncryptedPrivateMaterial.WrappedDekNonce);
         AddBlob(command, "$wrappedDekTag", key.EncryptedPrivateMaterial.WrappedDekTag);
-        command.ExecuteNonQuery();
+        try
+        {
+            command.ExecuteNonQuery();
+        }
+        catch (SqliteException exception) when (exception.SqliteErrorCode == 19)
+        {
+            throw new KeyAlreadyExistsException(key.KeyId.Name, exception);
+        }
         }
     }
 
@@ -88,17 +91,16 @@ public sealed class SqliteRsaKeyStore : IDisposable
         command.CommandText = """
             SELECT public_jwk, key_size, ciphertext, ciphertext_nonce, ciphertext_tag,
                    wrapped_dek, wrapped_dek_nonce, wrapped_dek_tag
-            FROM rsa_key_versions
-            WHERE tenant_id = $tenantId AND vault_name = $vault AND key_name = $name AND key_version = $version;
+            FROM rsa_keys
+            WHERE tenant_id = $tenantId AND vault_name = $vault AND key_name = $name;
             """;
         command.Parameters.AddWithValue("$tenantId", keyId.TenantId.Value.ToString("D"));
         command.Parameters.AddWithValue("$vault", keyId.Vault);
         command.Parameters.AddWithValue("$name", keyId.Name);
-        command.Parameters.AddWithValue("$version", keyId.Version);
         using var reader = command.ExecuteReader();
         if (!reader.Read())
         {
-            throw new KeyNotFoundException("The requested KMS key version was not found.");
+            throw new KeyNotFoundException("The requested KMS key was not found.");
         }
 
         var publicJwk = JsonSerializer.Deserialize<Dictionary<string, string>>(reader.GetString(0))
@@ -140,8 +142,8 @@ public sealed class SqliteRsaKeyStore : IDisposable
 
 public sealed class KeyAlreadyExistsException : InvalidOperationException
 {
-    public KeyAlreadyExistsException(string name)
-        : base($"A KMS key named '{name}' already exists.")
+    public KeyAlreadyExistsException(string name, Exception innerException)
+        : base($"A KMS key named '{name}' already exists.", innerException)
     {
     }
 }

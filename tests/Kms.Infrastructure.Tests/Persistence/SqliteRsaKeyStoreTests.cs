@@ -2,6 +2,7 @@ using Kms.Domain.Keys;
 using Kms.Domain.Tenancy;
 using Kms.Infrastructure.Keys;
 using Kms.Infrastructure.Persistence;
+using Microsoft.Data.Sqlite;
 using System.Security.Cryptography;
 
 namespace Kms.Infrastructure.Tests.Persistence;
@@ -14,7 +15,7 @@ public sealed class SqliteRsaKeyStoreTests
         var path = Path.Combine(Path.GetTempPath(), $"kms-state-{Guid.NewGuid():N}.sqlite");
         try
         {
-            var keyId = new KmsKeyId(new TenantId(Guid.NewGuid()), "development", "always-encrypted", Guid.NewGuid().ToString("N"));
+            var keyId = new KmsKeyId(new TenantId(Guid.NewGuid()), "development", "always-encrypted");
             var service = new RsaKeyService(new AesGcmKeyProtector(RandomNumberGenerator.GetBytes(32)));
             var original = service.Create(keyId);
             StoredRsaKey loaded;
@@ -38,19 +39,25 @@ public sealed class SqliteRsaKeyStoreTests
     }
 
     [Fact]
-    public void Store_rejects_a_second_key_version_for_the_same_name()
+    public void Constructor_rejects_a_legacy_versioned_state_database_instead_of_replacing_its_keys()
     {
         var path = Path.Combine(Path.GetTempPath(), $"kms-state-{Guid.NewGuid():N}.sqlite");
         try
         {
-            var tenant = new TenantId(Guid.NewGuid());
-            var service = new RsaKeyService(new AesGcmKeyProtector(RandomNumberGenerator.GetBytes(32)));
-            using (var store = new SqliteRsaKeyStore(path))
+            using (var connection = new SqliteConnection($"Data Source={path};Pooling=False"))
             {
-                store.Save(service.Create(new KmsKeyId(tenant, "development", "always-encrypted", "first")));
-
-                Assert.Throws<KeyAlreadyExistsException>(() => store.Save(service.Create(new KmsKeyId(tenant, "development", "always-encrypted", "second"))));
+                connection.Open();
+                using var command = connection.CreateCommand();
+                command.CommandText = "CREATE TABLE rsa_key_versions (key_name TEXT NOT NULL);";
+                command.ExecuteNonQuery();
             }
+
+            SqliteRsaKeyStore? store = null;
+            var exception = Record.Exception(() => store = new SqliteRsaKeyStore(path));
+            store?.Dispose();
+
+            var actual = Assert.IsType<InvalidOperationException>(exception);
+            Assert.Contains("legacy", actual.Message, StringComparison.OrdinalIgnoreCase);
         }
         finally
         {

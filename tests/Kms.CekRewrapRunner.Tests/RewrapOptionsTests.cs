@@ -19,27 +19,27 @@ public sealed class RewrapOptionsTests
     }
 
     [Fact]
-    public void Parse_accepts_a_version_pinned_https_freevault_key_url()
+    public void Parse_accepts_a_stable_https_freevault_key_url()
     {
-        var options = RewrapOptions.Parse(Arguments(keyUrl: "https://kms.example.test/keys/always-encrypted/version-1"));
+        var options = RewrapOptions.Parse(Arguments(keyUrl: "https://kms.example.test/keys/always-encrypted"));
 
-        Assert.Equal("https://kms.example.test/keys/always-encrypted/version-1", options.FreeVaultKeyUrl.AbsoluteUri);
+        Assert.Equal("https://kms.example.test/keys/always-encrypted", options.FreeVaultKeyUrl.AbsoluteUri);
     }
 
     [Fact]
     public void Parse_rejects_a_freevault_key_url_with_user_info()
     {
-        var exception = Assert.Throws<ArgumentException>(() => RewrapOptions.Parse(Arguments(keyUrl: "https://credential@kms.example.test/keys/always-encrypted/version-1")));
+        var exception = Assert.Throws<ArgumentException>(() => RewrapOptions.Parse(Arguments(keyUrl: "https://credential@kms.example.test/keys/always-encrypted")));
 
         Assert.Contains("credential", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
-    public void Parse_rejects_a_non_pinned_freevault_key_url()
+    public void Parse_rejects_a_versioned_freevault_key_url()
     {
-        var exception = Assert.Throws<ArgumentException>(() => RewrapOptions.Parse(Arguments(keyUrl: "https://kms.example.test/keys/always-encrypted")));
+        var exception = Assert.Throws<ArgumentException>(() => RewrapOptions.Parse(Arguments(keyUrl: "https://kms.example.test/keys/always-encrypted/version-1")));
 
-        Assert.Contains("version-pinned", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("/keys/{name}", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -57,7 +57,7 @@ public sealed class RewrapOptionsTests
         Assert.Contains("Encrypt=True", result, StringComparison.OrdinalIgnoreCase);
     }
 
-    private static string[] Arguments(string sourceDatabase = "Source", string? destinationDatabase = null, string keyUrl = "https://kms.example.test/keys/always-encrypted/version-1") =>
+    private static string[] Arguments(string sourceDatabase = "Source", string? destinationDatabase = null, string keyUrl = "https://kms.example.test/keys/always-encrypted") =>
     [
         "--source-database", sourceDatabase,
         "--destination-database", destinationDatabase ?? "Destination",

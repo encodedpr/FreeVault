@@ -94,5 +94,5 @@ public sealed class AesGcmKeyProtector
     }
 
     private static byte[] CreateAssociatedData(KmsKeyId keyId, string recordType)
-        => Encoding.UTF8.GetBytes($"{keyId.TenantId.Value:D}/{keyId.Vault}/{keyId.Name}/{keyId.Version}/{recordType}");
+        => Encoding.UTF8.GetBytes($"{keyId.TenantId.Value:D}/{keyId.Vault}/{keyId.Name}/{recordType}");
 }

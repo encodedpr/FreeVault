@@ -2,10 +2,9 @@
 
 ## What is delivered
 
-- One immutable RSA-3072 key version per name with encrypted PKCS#8 private
-  material: each key has a random AES-256-GCM DEK, itself AES-256-GCM wrapped
-  by a 32-byte root key. Phase Zero has no rotation, listing, or replacement
-  workflow.
+- One active RSA-3072 key per name with encrypted PKCS#8 private material:
+  each key has a random AES-256-GCM DEK, itself AES-256-GCM wrapped by a
+  32-byte root key. Phase Zero has no key rotation or versions.
 - Local client-credentials token endpoint, signed access tokens, OIDC discovery,
   JWKS, and authenticated Key Vault-style key routes.
 - `get`, `wrapkey`, `unwrapkey`, `encrypt`, `decrypt`, `sign`, and `verify`.
@@ -95,12 +94,10 @@ Always Encrypted bridge, rewrap runner, and Linux probe require an HTTPS
 terminator whose certificate is trusted by both the Windows runner and the
 Linux probe container.
 
-Create a key once the local API is running. The returned `kid` contains its
-immutable creation ID, for example
-`http://127.0.0.1:8080/keys/always-encrypted/<creation-id>`. The official
-SqlClient provider requires this pinned path. After TLS is configured, use the
-same full path under the HTTPS name as the runner's `--freevault-key-url` value
-and use only the HTTPS origin as `KMS_AE_ENDPOINT`.
+Create a key once the local API is running. The returned `kid` is stable and
+has the form `http://127.0.0.1:8080/keys/always-encrypted` locally. After TLS
+is configured, use the same path under the HTTPS name as the runner's
+`--freevault-key-url` value and use only the HTTPS origin as `KMS_AE_ENDPOINT`.
 
 ```powershell
 $baseUri = 'http://127.0.0.1:8080'
@@ -112,16 +109,14 @@ $key.key.kid
 ```
 
 Creating `always-encrypted` again returns `409 KeyAlreadyExists`; Phase Zero
-will never silently replace the key behind a CEK. Although the returned URL has
-an immutable creation ID for SqlClient compatibility, Phase Zero has no key
-rotation operation. Do not reset the state or root key once a clone has been
-rewrapped against this key.
+will never silently replace the key behind a CEK. Do not reset the state or
+root key once a clone has been rewrapped against this key.
 
 ## Always Encrypted validation boundary
 
 The bridge and probe compile and are contract-tested against the official
 SqlClient Azure Key Vault provider. `Kms.CekRewrapRunner` reads the inherited
-CEK through the Windows certificate-store provider, adds an immutable
+CEK through the Windows certificate-store provider, adds a stable
 FreeVault-backed CEK value to the separately named destination clone, verifies
 a transparent read, and removes only the inherited destination value.
 
@@ -144,12 +139,12 @@ provider is generated, mounted, or configured.
 ## Rewrap, probe, backup, and recovery
 
 Set `KMS_AE_ENDPOINT` to the HTTPS FreeVault origin, set the tenant/client/
-secret-file bridge variables listed above, and supply the full pinned HTTPS key
-URL returned at key creation to `Kms.CekRewrapRunner`. Supply the SQL inputs only for a separately named,
+secret-file bridge variables listed above, and supply the stable HTTPS key URL
+returned at key creation to `Kms.CekRewrapRunner`. Supply the SQL inputs only for a separately named,
 disposable destination clone. Then run the runner from Windows and run
 `Kms.AeProbe` from Linux with `KMS_AE_PROBE_CONNECTION` pointing at that clone.
 The opt-in `CekRewrapSqlTests` uses the same `KMS_AE_SQL_*` values and skips
-when they are absent. For the runner, the pinned key URL must have the exact
+when they are absent. For the runner, the stable key URL must have the exact
 same HTTPS scheme, host, and port as `KMS_AE_ENDPOINT`.
 
 Back up `docker/state/freevault.sqlite` and `local/root-key.bin` together,

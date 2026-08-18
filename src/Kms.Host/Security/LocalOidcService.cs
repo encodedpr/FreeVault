@@ -12,7 +12,7 @@ public sealed class LocalOidcService
 {
     private const string SigningVault = "__system";
     private const string SigningKeyName = "oidc-signing";
-    private const string SigningKeyVersion = "phase-zero";
+    private const string SigningKeyId = "freevault-local";
     private readonly BootstrapKmsOptions _options;
     private readonly SqliteRsaKeyStore _store;
     private readonly RsaKeyService _rsa;
@@ -33,7 +33,7 @@ public sealed class LocalOidcService
         {
             alg = "RS256",
             typ = "JWT",
-            kid = SigningKeyVersion,
+            kid = SigningKeyId,
         }));
         var payload = Base64UrlEncode(JsonSerializer.SerializeToUtf8Bytes(new
         {
@@ -105,7 +105,7 @@ public sealed class LocalOidcService
 
     private StoredRsaKey GetSigningKey()
     {
-        var id = new KmsKeyId(new TenantId(_options.TenantId), SigningVault, SigningKeyName, SigningKeyVersion);
+        var id = new KmsKeyId(new TenantId(_options.TenantId), SigningVault, SigningKeyName);
         if (_store.TryGet(id, out var key) && key is not null)
         {
             return key;
@@ -117,7 +117,7 @@ public sealed class LocalOidcService
             _store.Save(created);
             return created;
         }
-        catch (Microsoft.Data.Sqlite.SqliteException)
+        catch (KeyAlreadyExistsException)
         {
             return _store.Get(id);
         }
@@ -130,7 +130,7 @@ public sealed class LocalOidcService
         e = key.PublicJwk["e"],
         alg = "RS256",
         use = "sig",
-        kid = SigningKeyVersion,
+        kid = SigningKeyId,
     };
 
     private static string BaseAddress(HttpRequest request) => $"{request.Scheme}://{request.Host}";

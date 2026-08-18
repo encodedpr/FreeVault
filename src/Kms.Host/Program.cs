@@ -61,7 +61,7 @@ app.MapPost("/keys/{name}/create", (string name, HttpRequest request, BootstrapK
         return Results.BadRequest(new { error = new { code = "BadParameter", message = "A key name is required." } });
     }
 
-    var id = new KmsKeyId(new TenantId(configured.TenantId), "default", name, Guid.NewGuid().ToString("N"));
+    var id = new KmsKeyId(new TenantId(configured.TenantId), "default", name);
     var key = rsa.Create(id);
     try
     {
@@ -74,74 +74,74 @@ app.MapPost("/keys/{name}/create", (string name, HttpRequest request, BootstrapK
     }
 });
 
-app.MapGet("/keys/{name}/{version}", (string name, string version, HttpRequest request, BootstrapKmsOptions configured, LocalOidcService oidc, SqliteRsaKeyStore store) =>
+app.MapGet("/keys/{name}", (string name, HttpRequest request, BootstrapKmsOptions configured, LocalOidcService oidc, SqliteRsaKeyStore store) =>
 {
     if (!oidc.IsAuthorized(request))
     {
         return Unauthorized(request, configured, oidc);
     }
 
-    return TryGetKey(name, version, configured, store, key => Results.Json(KeyResponse(request, key)));
+    return TryGetKey(name, configured, store, key => Results.Json(KeyResponse(request, key)));
 });
 
-app.MapPost("/keys/{name}/{version}/wrapkey", (string name, string version, KeyOperationRequest operation, HttpRequest request, BootstrapKmsOptions configured, LocalOidcService oidc, RsaKeyService rsa, SqliteRsaKeyStore store) =>
+app.MapPost("/keys/{name}/wrapkey", (string name, KeyOperationRequest operation, HttpRequest request, BootstrapKmsOptions configured, LocalOidcService oidc, RsaKeyService rsa, SqliteRsaKeyStore store) =>
 {
     if (!oidc.IsAuthorized(request))
     {
         return Unauthorized(request, configured, oidc);
     }
 
-    return TryGetKey(name, version, configured, store, key => ExecuteKeyOperation(request, key, operation, rsa, unwrap: false));
+    return TryGetKey(name, configured, store, key => ExecuteKeyOperation(request, key, operation, rsa, unwrap: false));
 });
 
-app.MapPost("/keys/{name}/{version}/unwrapkey", (string name, string version, KeyOperationRequest operation, HttpRequest request, BootstrapKmsOptions configured, LocalOidcService oidc, RsaKeyService rsa, SqliteRsaKeyStore store) =>
+app.MapPost("/keys/{name}/unwrapkey", (string name, KeyOperationRequest operation, HttpRequest request, BootstrapKmsOptions configured, LocalOidcService oidc, RsaKeyService rsa, SqliteRsaKeyStore store) =>
 {
     if (!oidc.IsAuthorized(request))
     {
         return Unauthorized(request, configured, oidc);
     }
 
-    return TryGetKey(name, version, configured, store, key => ExecuteKeyOperation(request, key, operation, rsa, unwrap: true));
+    return TryGetKey(name, configured, store, key => ExecuteKeyOperation(request, key, operation, rsa, unwrap: true));
 });
 
-app.MapPost("/keys/{name}/{version}/encrypt", (string name, string version, KeyOperationRequest operation, HttpRequest request, BootstrapKmsOptions configured, LocalOidcService oidc, RsaKeyService rsa, SqliteRsaKeyStore store) =>
+app.MapPost("/keys/{name}/encrypt", (string name, KeyOperationRequest operation, HttpRequest request, BootstrapKmsOptions configured, LocalOidcService oidc, RsaKeyService rsa, SqliteRsaKeyStore store) =>
 {
     if (!oidc.IsAuthorized(request))
     {
         return Unauthorized(request, configured, oidc);
     }
 
-    return TryGetKey(name, version, configured, store, key => ExecuteKeyOperation(request, key, operation, rsa, unwrap: false));
+    return TryGetKey(name, configured, store, key => ExecuteKeyOperation(request, key, operation, rsa, unwrap: false));
 });
 
-app.MapPost("/keys/{name}/{version}/decrypt", (string name, string version, KeyOperationRequest operation, HttpRequest request, BootstrapKmsOptions configured, LocalOidcService oidc, RsaKeyService rsa, SqliteRsaKeyStore store) =>
+app.MapPost("/keys/{name}/decrypt", (string name, KeyOperationRequest operation, HttpRequest request, BootstrapKmsOptions configured, LocalOidcService oidc, RsaKeyService rsa, SqliteRsaKeyStore store) =>
 {
     if (!oidc.IsAuthorized(request))
     {
         return Unauthorized(request, configured, oidc);
     }
 
-    return TryGetKey(name, version, configured, store, key => ExecuteKeyOperation(request, key, operation, rsa, unwrap: true));
+    return TryGetKey(name, configured, store, key => ExecuteKeyOperation(request, key, operation, rsa, unwrap: true));
 });
 
-app.MapPost("/keys/{name}/{version}/sign", (string name, string version, KeyOperationRequest operation, HttpRequest request, BootstrapKmsOptions configured, LocalOidcService oidc, RsaKeyService rsa, SqliteRsaKeyStore store) =>
+app.MapPost("/keys/{name}/sign", (string name, KeyOperationRequest operation, HttpRequest request, BootstrapKmsOptions configured, LocalOidcService oidc, RsaKeyService rsa, SqliteRsaKeyStore store) =>
 {
     if (!oidc.IsAuthorized(request))
     {
         return Unauthorized(request, configured, oidc);
     }
 
-    return TryGetKey(name, version, configured, store, key => ExecuteSign(request, key, operation, rsa));
+    return TryGetKey(name, configured, store, key => ExecuteSign(request, key, operation, rsa));
 });
 
-app.MapPost("/keys/{name}/{version}/verify", (string name, string version, VerifyOperationRequest operation, HttpRequest request, BootstrapKmsOptions configured, LocalOidcService oidc, RsaKeyService rsa, SqliteRsaKeyStore store) =>
+app.MapPost("/keys/{name}/verify", (string name, VerifyOperationRequest operation, HttpRequest request, BootstrapKmsOptions configured, LocalOidcService oidc, RsaKeyService rsa, SqliteRsaKeyStore store) =>
 {
     if (!oidc.IsAuthorized(request))
     {
         return Unauthorized(request, configured, oidc);
     }
 
-    return TryGetKey(name, version, configured, store, key => ExecuteVerify(key, operation, rsa));
+    return TryGetKey(name, configured, store, key => ExecuteVerify(key, operation, rsa));
 });
 
 app.Run();
@@ -160,7 +160,7 @@ static object KeyResponse(HttpRequest request, StoredRsaKey key) => new
 {
     key = new
     {
-        kid = $"{request.Scheme}://{request.Host}/keys/{key.KeyId.Name}/{key.KeyId.Version}",
+        kid = $"{request.Scheme}://{request.Host}/keys/{key.KeyId.Name}",
         kty = key.PublicJwk["kty"],
         n = key.PublicJwk["n"],
         e = key.PublicJwk["e"],
@@ -169,11 +169,11 @@ static object KeyResponse(HttpRequest request, StoredRsaKey key) => new
     attributes = new { enabled = true },
 };
 
-static IResult TryGetKey(string name, string version, BootstrapKmsOptions options, SqliteRsaKeyStore store, Func<StoredRsaKey, IResult> operation)
+static IResult TryGetKey(string name, BootstrapKmsOptions options, SqliteRsaKeyStore store, Func<StoredRsaKey, IResult> operation)
 {
     try
     {
-        var id = new KmsKeyId(new TenantId(options.TenantId), "default", name, version);
+        var id = new KmsKeyId(new TenantId(options.TenantId), "default", name);
         return operation(store.Get(id));
     }
     catch (KeyNotFoundException)
@@ -195,7 +195,7 @@ static IResult ExecuteKeyOperation(HttpRequest request, StoredRsaKey key, KeyOpe
         var result = unwrap ? rsa.Unwrap(key, value, operation.Alg) : rsa.Wrap(key, value, operation.Alg);
         return Results.Json(new
         {
-            kid = $"{request.Scheme}://{request.Host}/keys/{key.KeyId.Name}/{key.KeyId.Version}",
+            kid = $"{request.Scheme}://{request.Host}/keys/{key.KeyId.Name}",
             value = Base64UrlEncode(result),
         });
     }
@@ -221,7 +221,7 @@ static IResult ExecuteSign(HttpRequest request, StoredRsaKey key, KeyOperationRe
         var signature = rsa.Sign(key, Base64UrlDecode(operation.Value));
         return Results.Json(new
         {
-            kid = $"{request.Scheme}://{request.Host}/keys/{key.KeyId.Name}/{key.KeyId.Version}",
+            kid = $"{request.Scheme}://{request.Host}/keys/{key.KeyId.Name}",
             value = Base64UrlEncode(signature),
         });
     }

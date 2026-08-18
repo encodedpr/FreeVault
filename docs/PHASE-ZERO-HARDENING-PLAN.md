@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Deliver a simple, localhost-only FreeVault Phase Zero workflow with one immutable provider-required key ID per name, tested failure behavior, and operator documentation.
+**Goal:** Deliver a simple, localhost-only, non-versioned FreeVault Phase Zero workflow with tested failure behavior and operator documentation.
 
-**Architecture:** The host stores one immutable RSA key version for each name and exposes the pinned URLs required by the official SqlClient provider. The CEK rewrap runner validates that same HTTPS key URL. Compose stays loopback-only and the runbook provides one developer workflow plus recovery boundaries.
+**Architecture:** The host stores one active RSA key for each name and exposes only stable `/keys/{name}` URLs. The CEK rewrap runner validates that same stable HTTPS key URL. Compose stays loopback-only and the runbook provides one developer workflow plus recovery boundaries.
 
 **Tech Stack:** .NET 10, ASP.NET Core minimal APIs, Microsoft.Data.SqlClient, xUnit, SQLite, Docker Compose.
 

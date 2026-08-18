@@ -3,16 +3,16 @@
 ## Goal
 
 Make FreeVault straightforward and safe for a single-machine developer
-workflow: one immutable provider-required key ID per name, localhost-only default exposure, and a
+workflow: one active key per name, localhost-only default exposure, and a
 copy-paste operator path for the KMS, CEK migration, and Linux probe.
 
 ## Scope
 
-Phase Zero deliberately has no key rotation, listing, or replacement workflow.
-The official SqlClient Azure Key Vault provider requires an immutable key ID,
-so a key is addressed as `https://<host>/keys/<name>/<creation-id>` and each
-name may be created only once. The create operation for an existing name must
-fail rather than silently replace key material.
+Phase Zero deliberately has no key versioning or rotation workflow. A key is
+addressed as `https://<host>/keys/<name>` and is backed by exactly one active
+RSA-3072 key. The create operation for an existing name must fail rather than
+silently replace key material. Versioned routes and version-pinned key URLs are
+removed from the supported contract.
 
 The Docker Compose service remains reachable only through
 `127.0.0.1:8080`. It must keep the root key and bootstrap secret read-only,
@@ -22,9 +22,9 @@ secret file is malformed or unavailable. It must not log secret values.
 
 ## API and migration contract
 
-Supported authenticated routes use `/keys/{name}/{creationId}` for `get`,
-`wrapkey`, `unwrapkey`, `encrypt`, `decrypt`, `sign`, and `verify`; creation
-remains `POST /keys/{name}/create`. Every returned `kid` is immutable. The
+Supported authenticated routes use `/keys/{name}` for `get`, `wrapkey`,
+`unwrapkey`, `encrypt`, `decrypt`, `sign`, and `verify`; creation remains
+`POST /keys/{name}/create`. Every returned `kid` is non-versioned. The
 official SqlClient Azure Key Vault provider remains the AE provider. The
 rewrap runner accepts the same stable HTTPS key URL and creates destination
 CMK metadata pointing to it.

@@ -150,7 +150,7 @@ public sealed class KeyVaultKeyApiTests
         var key = keyDocument.RootElement.GetProperty("key");
         Assert.Equal("RSA", key.GetProperty("kty").GetString());
         var keyId = key.GetProperty("kid").GetString();
-        Assert.StartsWith("http://localhost/keys/always-encrypted/", keyId);
+        Assert.Equal("http://localhost/keys/always-encrypted", keyId);
         Assert.False(string.IsNullOrWhiteSpace(key.GetProperty("n").GetString()));
 
         var keyPath = new Uri(keyId!).PathAndQuery;
@@ -227,9 +227,9 @@ public sealed class KeyVaultKeyApiTests
     }
 
     [Fact]
-    public async Task Versioned_key_route_rejects_a_missing_bearer_token()
+    public async Task Stable_key_route_rejects_a_missing_bearer_token()
     {
-        var response = await _client.GetAsync("/keys/always-encrypted/not-a-real-version");
+        var response = await _client.GetAsync("/keys/always-encrypted");
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
