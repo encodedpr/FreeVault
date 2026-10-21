@@ -13,6 +13,14 @@ public sealed class DockerContractTests
         Assert.Contains("127.0.0.1:8080:8080", compose, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Compose_passes_the_public_endpoint_to_the_kms()
+    {
+        var compose = File.ReadAllText(Path.Combine(RepositoryRoot(), "docker", "docker-compose.kms.yml"));
+
+        Assert.Contains("KMS_PUBLIC_ENDPOINT: ${KMS_PUBLIC_ENDPOINT:-}", compose, StringComparison.Ordinal);
+    }
+
     private static string RepositoryRoot()
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);

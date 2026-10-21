@@ -32,6 +32,7 @@ KMS_BOOTSTRAP_TENANT_ID
 KMS_BOOTSTRAP_CLIENT_ID
 KMS_BOOTSTRAP_CLIENT_SECRET_FILE
 KMS_BOOTSTRAP_KEY_PERMISSIONS (optional; comma-separated exact permissions)
+KMS_PUBLIC_ENDPOINT (optional; public HTTPS origin when behind a proxy)
 ```
 
 The bridge/probe additionally require:
@@ -61,6 +62,12 @@ KMS_AE_SQL_FREEVAULT_KEY_URL
 `KMS_AE_ENDPOINT` must be an HTTPS endpoint. The supplied compose file exposes
 the KMS only on loopback for local health/API work; place a TLS terminator in
 front of it before using the Always Encrypted bridge.
+
+When requests arrive through a TLS-terminating reverse proxy, set
+`KMS_PUBLIC_ENDPOINT` to the public HTTPS origin (for example,
+`https://freevault.example.com`). Compose passes this value to the KMS so OIDC
+discovery, authentication challenges, and key URLs use the public endpoint
+instead of the proxy's internal HTTP address.
 
 `KMS_BOOTSTRAP_KEY_PERMISSIONS` controls the persisted permissions granted to
 the bootstrap client at startup. When omitted, all currently supported Keys
@@ -144,8 +151,10 @@ var keys = new KeyClient(vaultUri, credential, options);
 ```
 
 Supported management calls are RSA create, get, list, enabled-state update,
-and soft delete. Delete removes the key from normal reads and crypto operations
-without creating a version. Recover, purge, key versions, rotation,
+and soft delete. Create requests may omit `kty` and `key_size` (the defaults are
+RSA and 3072); explicit values must request RSA-3072. Delete removes the key
+from normal reads and crypto operations without creating a version. Recover,
+purge, key versions, rotation,
 backup/restore, import/export, EC/AES keys, secrets, and certificates are not
 available yet and must not be relied upon.
 

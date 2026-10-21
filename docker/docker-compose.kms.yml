@@ -8,6 +8,7 @@ services:
     environment:
       KMS_ROOT_KEY_FILE: /run/kms/root-key.bin
       KMS_STATE_PATH: /var/lib/kms/freevault.sqlite
+      KMS_PUBLIC_ENDPOINT: ${KMS_PUBLIC_ENDPOINT:-}
       KMS_BOOTSTRAP_TENANT_ID: ${KMS_BOOTSTRAP_TENANT_ID}
       KMS_BOOTSTRAP_CLIENT_ID: ${KMS_BOOTSTRAP_CLIENT_ID}
       KMS_BOOTSTRAP_CLIENT_SECRET_FILE: /run/kms/bootstrap-client-secret.txt

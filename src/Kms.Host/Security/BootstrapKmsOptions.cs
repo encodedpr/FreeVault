@@ -11,6 +11,7 @@ public sealed class BootstrapKmsOptions
     public required string ClientSecret { get; init; }
     public required string StatePath { get; init; }
     public required IReadOnlySet<KeyPermission> KeyPermissions { get; init; }
+    public Uri? PublicEndpoint { get; init; }
 
     public static BootstrapKmsOptions Load(IConfiguration configuration)
     {
@@ -46,8 +47,12 @@ public sealed class BootstrapKmsOptions
             ClientSecret = clientSecret,
             StatePath = Path.GetFullPath(statePath),
             KeyPermissions = LoadPermissions(configuration["KMS_BOOTSTRAP_KEY_PERMISSIONS"]),
+            PublicEndpoint = LoadPublicEndpoint(configuration["KMS_PUBLIC_ENDPOINT"]),
         };
     }
+
+    public string BaseAddress(HttpRequest request)
+        => PublicEndpoint?.GetLeftPart(UriPartial.Authority) ?? $"{request.Scheme}://{request.Host}";
 
     public bool IsValidClientSecret(string clientId, string clientSecret)
     {
@@ -85,5 +90,25 @@ public sealed class BootstrapKmsOptions
         }
 
         return permissions;
+    }
+
+    private static Uri? LoadPublicEndpoint(string? configuredEndpoint)
+    {
+        if (string.IsNullOrWhiteSpace(configuredEndpoint))
+        {
+            return null;
+        }
+
+        if (!Uri.TryCreate(configuredEndpoint, UriKind.Absolute, out var endpoint)
+            || !string.Equals(endpoint.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)
+            || !string.IsNullOrEmpty(endpoint.UserInfo)
+            || !string.IsNullOrEmpty(endpoint.Query)
+            || !string.IsNullOrEmpty(endpoint.Fragment)
+            || endpoint.AbsolutePath != "/")
+        {
+            throw new InvalidOperationException("KMS_PUBLIC_ENDPOINT must be an absolute HTTPS origin without user information, a path, query, or fragment.");
+        }
+
+        return endpoint;
     }
 }

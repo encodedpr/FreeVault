@@ -53,15 +53,19 @@ public sealed class KmsHostFactory : WebApplicationFactory<Program>, IDisposable
     public string ClientId { get; } = "phase-zero-client";
     public string ClientSecret { get; } = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
     private readonly string? _bootstrapKeyPermissions;
+    private readonly string? _publicEndpoint;
+
+    internal string StatePath => _statePath;
 
     public KmsHostFactory()
         : this(null)
     {
     }
 
-    internal KmsHostFactory(string? bootstrapKeyPermissions)
+    internal KmsHostFactory(string? bootstrapKeyPermissions, string? publicEndpoint = null)
     {
         _bootstrapKeyPermissions = bootstrapKeyPermissions;
+        _publicEndpoint = publicEndpoint;
         File.WriteAllBytes(_rootKeyPath, RandomNumberGenerator.GetBytes(32));
         File.WriteAllText(_clientSecretPath, ClientSecret);
         Environment.SetEnvironmentVariable("KMS_ROOT_KEY_FILE", _rootKeyPath);
@@ -70,6 +74,7 @@ public sealed class KmsHostFactory : WebApplicationFactory<Program>, IDisposable
         Environment.SetEnvironmentVariable("KMS_BOOTSTRAP_CLIENT_SECRET_FILE", _clientSecretPath);
         Environment.SetEnvironmentVariable("KMS_BOOTSTRAP_KEY_PERMISSIONS", _bootstrapKeyPermissions);
         Environment.SetEnvironmentVariable("KMS_STATE_PATH", _statePath);
+        Environment.SetEnvironmentVariable("KMS_PUBLIC_ENDPOINT", _publicEndpoint);
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -85,6 +90,7 @@ public sealed class KmsHostFactory : WebApplicationFactory<Program>, IDisposable
                 ["KMS_BOOTSTRAP_CLIENT_SECRET_FILE"] = _clientSecretPath,
                 ["KMS_BOOTSTRAP_KEY_PERMISSIONS"] = _bootstrapKeyPermissions,
                 ["KMS_STATE_PATH"] = _statePath,
+                ["KMS_PUBLIC_ENDPOINT"] = _publicEndpoint,
             });
         });
     }
@@ -108,6 +114,7 @@ public sealed class KmsHostFactory : WebApplicationFactory<Program>, IDisposable
             Environment.SetEnvironmentVariable("KMS_BOOTSTRAP_CLIENT_SECRET_FILE", null);
             Environment.SetEnvironmentVariable("KMS_BOOTSTRAP_KEY_PERMISSIONS", null);
             Environment.SetEnvironmentVariable("KMS_STATE_PATH", null);
+            Environment.SetEnvironmentVariable("KMS_PUBLIC_ENDPOINT", null);
         }
     }
 
@@ -403,6 +410,186 @@ public sealed class KeyVaultKeyApiTests
     }
 
     [Fact]
+    public async Task Key_client_delete_operation_completes_by_reading_the_deleted_key()
+    {
+        using var transportClient = _factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            BaseAddress = new Uri("https://localhost"),
+        });
+        using var tokenRequest = new HttpRequestMessage(HttpMethod.Post, $"/{_factory.TenantId:D}/oauth2/v2.0/token")
+        {
+            Content = new FormUrlEncodedContent(new Dictionary<string, string>
+            {
+                ["grant_type"] = "client_credentials",
+                ["client_id"] = _factory.ClientId,
+                ["client_secret"] = _factory.ClientSecret,
+                ["scope"] = "https://vault.azure.net/.default",
+            }),
+        };
+        using var tokenResponse = await transportClient.SendAsync(tokenRequest);
+        using var tokenDocument = JsonDocument.Parse(await tokenResponse.Content.ReadAsStringAsync());
+        var options = new KeyClientOptions(KeyClientOptions.ServiceVersion.V7_4)
+        {
+            DisableChallengeResourceVerification = true,
+            Transport = new HttpClientTransport(transportClient),
+        };
+        var keyClient = new KeyClient(transportClient.BaseAddress!, new StaticTokenCredential(tokenDocument.RootElement.GetProperty("access_token").GetString()!), options);
+        const string keyName = "delete-operation";
+        await keyClient.CreateRsaKeyAsync(new CreateRsaKeyOptions(keyName) { KeySize = 3072 });
+
+        var deletion = await keyClient.StartDeleteKeyAsync(keyName);
+        await deletion.UpdateStatusAsync();
+
+        Assert.True(deletion.HasCompleted);
+        Assert.Equal(keyName, deletion.Value.Name);
+    }
+
+    [Fact]
+    public async Task Create_advertises_each_supported_key_operation()
+    {
+        using var tokenRequest = new HttpRequestMessage(HttpMethod.Post, $"/{_factory.TenantId:D}/oauth2/v2.0/token")
+        {
+            Content = new FormUrlEncodedContent(new Dictionary<string, string>
+            {
+                ["grant_type"] = "client_credentials",
+                ["client_id"] = _factory.ClientId,
+                ["client_secret"] = _factory.ClientSecret,
+                ["scope"] = "https://vault.azure.net/.default",
+            }),
+        };
+        using var tokenResponse = await _client.SendAsync(tokenRequest);
+        using var tokenDocument = JsonDocument.Parse(await tokenResponse.Content.ReadAsStringAsync());
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokenDocument.RootElement.GetProperty("access_token").GetString());
+
+        using var response = await _client.PostAsJsonAsync("/keys/advertised-operations/create?api-version=7.4", new { });
+        response.EnsureSuccessStatusCode();
+        using var keyDocument = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var operations = keyDocument.RootElement.GetProperty("key").GetProperty("key_ops").EnumerateArray().Select(value => value.GetString()).ToArray();
+
+        Assert.Contains("encrypt", operations);
+        Assert.Contains("decrypt", operations);
+    }
+
+    [Fact]
+    public async Task Sign_rejects_a_digest_that_is_not_sha256_length()
+    {
+        await AuthorizeBootstrapClientAsync();
+        const string keyName = "invalid-sign-digest";
+        using var createResponse = await _client.PostAsJsonAsync($"/keys/{keyName}/create?api-version=7.4", new { });
+        createResponse.EnsureSuccessStatusCode();
+
+        using var response = await _client.PostAsJsonAsync($"/keys/{keyName}/sign?api-version=7.4", new
+        {
+            alg = "RS256",
+            value = Base64UrlEncode(new byte[31]),
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var error = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("BadParameter", error.RootElement.GetProperty("error").GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task Verify_returns_false_when_a_digest_is_not_sha256_length()
+    {
+        await AuthorizeBootstrapClientAsync();
+        const string keyName = "invalid-verify-digest";
+        using var createResponse = await _client.PostAsJsonAsync($"/keys/{keyName}/create?api-version=7.4", new { });
+        createResponse.EnsureSuccessStatusCode();
+
+        using var response = await _client.PostAsJsonAsync($"/keys/{keyName}/verify?api-version=7.4", new
+        {
+            alg = "RS256",
+            value = Base64UrlEncode(new byte[31]),
+            signature = Base64UrlEncode(new byte[384]),
+        });
+
+        response.EnsureSuccessStatusCode();
+        using var result = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.False(result.RootElement.GetProperty("value").GetBoolean());
+    }
+
+    [Theory]
+    [InlineData("EC", 3072)]
+    [InlineData("RSA", 2048)]
+    public async Task Create_rejects_explicit_key_types_or_sizes_outside_the_supported_contract(string keyType, int keySize)
+    {
+        await AuthorizeBootstrapClientAsync();
+        var keyName = $"unsupported-{keyType}-{keySize}";
+
+        using var response = await _client.PostAsJsonAsync($"/keys/{keyName}/create?api-version=7.4", new
+        {
+            kty = keyType,
+            key_size = keySize,
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var error = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("BadParameter", error.RootElement.GetProperty("error").GetProperty("code").GetString());
+        Assert.Equal(HttpStatusCode.NotFound, (await _client.GetAsync($"/keys/{keyName}?api-version=7.4")).StatusCode);
+    }
+
+    private async Task AuthorizeBootstrapClientAsync()
+    {
+        using var tokenRequest = new HttpRequestMessage(HttpMethod.Post, $"/{_factory.TenantId:D}/oauth2/v2.0/token")
+        {
+            Content = new FormUrlEncodedContent(new Dictionary<string, string>
+            {
+                ["grant_type"] = "client_credentials",
+                ["client_id"] = _factory.ClientId,
+                ["client_secret"] = _factory.ClientSecret,
+                ["scope"] = "https://vault.azure.net/.default",
+            }),
+        };
+        using var tokenResponse = await _client.SendAsync(tokenRequest);
+        tokenResponse.EnsureSuccessStatusCode();
+        using var tokenDocument = JsonDocument.Parse(await tokenResponse.Content.ReadAsStringAsync());
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokenDocument.RootElement.GetProperty("access_token").GetString());
+    }
+
+    [Fact]
+    public async Task Create_audit_records_an_authenticated_invalid_key_name_as_failed()
+    {
+        using var tokenRequest = new HttpRequestMessage(HttpMethod.Post, $"/{_factory.TenantId:D}/oauth2/v2.0/token")
+        {
+            Content = new FormUrlEncodedContent(new Dictionary<string, string>
+            {
+                ["grant_type"] = "client_credentials",
+                ["client_id"] = _factory.ClientId,
+                ["client_secret"] = _factory.ClientSecret,
+                ["scope"] = "https://vault.azure.net/.default",
+            }),
+        };
+        using var tokenResponse = await _client.SendAsync(tokenRequest);
+        using var tokenDocument = JsonDocument.Parse(await tokenResponse.Content.ReadAsStringAsync());
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokenDocument.RootElement.GetProperty("access_token").GetString());
+
+        using var response = await _client.PostAsJsonAsync("/keys/invalid%20audit/create?api-version=7.4", new { });
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        using var connection = new SqliteConnection($"Data Source={_factory.StatePath};Pooling=False");
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT outcome FROM key_audit_events WHERE key_name = 'invalid audit' AND operation = 'create';";
+        var outcome = command.ExecuteScalar() as string;
+
+        Assert.Equal("failed", outcome);
+    }
+
+    [Fact]
+    public async Task Configured_public_endpoint_is_used_for_oidc_discovery()
+    {
+        using var publicEndpointFactory = new KmsHostFactory(null, "https://freevault.example.test:8443");
+        using var client = publicEndpointFactory.CreateClient();
+
+        using var response = await client.GetAsync($"/{publicEndpointFactory.TenantId:D}/v2.0/.well-known/openid-configuration");
+        response.EnsureSuccessStatusCode();
+        using var discovery = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+
+        Assert.Equal($"https://freevault.example.test:8443/{publicEndpointFactory.TenantId:D}/v2.0", discovery.RootElement.GetProperty("issuer").GetString());
+    }
+
+    [Fact]
     public async Task Disabled_key_rejects_cryptographic_operations()
     {
         using var tokenRequest = new HttpRequestMessage(HttpMethod.Post, $"/{_factory.TenantId:D}/oauth2/v2.0/token")
@@ -554,4 +741,5 @@ public sealed class KeyVaultKeyApiTests
         public override ValueTask<AccessToken> GetTokenAsync(TokenRequestContext requestContext, CancellationToken cancellationToken)
             => ValueTask.FromResult(_token);
     }
+
 }

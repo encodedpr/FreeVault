@@ -58,34 +58,34 @@ public sealed class SqliteRsaKeyStore : IDisposable
     {
         lock (_gate)
         {
-        using var command = _connection.CreateCommand();
-        command.CommandText = """
+            using var command = _connection.CreateCommand();
+            command.CommandText = """
             INSERT INTO rsa_keys (
                 tenant_id, vault_name, key_name, public_jwk, key_size, enabled,
                 ciphertext, ciphertext_nonce, ciphertext_tag, wrapped_dek, wrapped_dek_nonce, wrapped_dek_tag)
             VALUES ($tenantId, $vault, $name, $publicJwk, $keySize, $enabled,
                 $ciphertext, $ciphertextNonce, $ciphertextTag, $wrappedDek, $wrappedDekNonce, $wrappedDekTag);
             """;
-        command.Parameters.AddWithValue("$tenantId", key.KeyId.TenantId.Value.ToString("D"));
-        command.Parameters.AddWithValue("$vault", key.KeyId.Vault);
-        command.Parameters.AddWithValue("$name", key.KeyId.Name);
-        command.Parameters.AddWithValue("$publicJwk", JsonSerializer.Serialize(key.PublicJwk));
-        command.Parameters.AddWithValue("$keySize", key.KeySize);
-        command.Parameters.AddWithValue("$enabled", key.Enabled ? 1 : 0);
-        AddBlob(command, "$ciphertext", key.EncryptedPrivateMaterial.Ciphertext);
-        AddBlob(command, "$ciphertextNonce", key.EncryptedPrivateMaterial.CiphertextNonce);
-        AddBlob(command, "$ciphertextTag", key.EncryptedPrivateMaterial.CiphertextTag);
-        AddBlob(command, "$wrappedDek", key.EncryptedPrivateMaterial.WrappedDek);
-        AddBlob(command, "$wrappedDekNonce", key.EncryptedPrivateMaterial.WrappedDekNonce);
-        AddBlob(command, "$wrappedDekTag", key.EncryptedPrivateMaterial.WrappedDekTag);
-        try
-        {
-            command.ExecuteNonQuery();
-        }
-        catch (SqliteException exception) when (exception.SqliteErrorCode == 19)
-        {
-            throw new KeyAlreadyExistsException(key.KeyId.Name, exception);
-        }
+            command.Parameters.AddWithValue("$tenantId", key.KeyId.TenantId.Value.ToString("D"));
+            command.Parameters.AddWithValue("$vault", key.KeyId.Vault);
+            command.Parameters.AddWithValue("$name", key.KeyId.Name);
+            command.Parameters.AddWithValue("$publicJwk", JsonSerializer.Serialize(key.PublicJwk));
+            command.Parameters.AddWithValue("$keySize", key.KeySize);
+            command.Parameters.AddWithValue("$enabled", key.Enabled ? 1 : 0);
+            AddBlob(command, "$ciphertext", key.EncryptedPrivateMaterial.Ciphertext);
+            AddBlob(command, "$ciphertextNonce", key.EncryptedPrivateMaterial.CiphertextNonce);
+            AddBlob(command, "$ciphertextTag", key.EncryptedPrivateMaterial.CiphertextTag);
+            AddBlob(command, "$wrappedDek", key.EncryptedPrivateMaterial.WrappedDek);
+            AddBlob(command, "$wrappedDekNonce", key.EncryptedPrivateMaterial.WrappedDekNonce);
+            AddBlob(command, "$wrappedDekTag", key.EncryptedPrivateMaterial.WrappedDekTag);
+            try
+            {
+                command.ExecuteNonQuery();
+            }
+            catch (SqliteException exception) when (exception.SqliteErrorCode == 19)
+            {
+                throw new KeyAlreadyExistsException(key.KeyId.Name, exception);
+            }
         }
     }
 
@@ -93,33 +93,33 @@ public sealed class SqliteRsaKeyStore : IDisposable
     {
         lock (_gate)
         {
-        using var command = _connection.CreateCommand();
-        command.CommandText = """
+            using var command = _connection.CreateCommand();
+            command.CommandText = """
             SELECT public_jwk, key_size, enabled, ciphertext, ciphertext_nonce, ciphertext_tag,
                    wrapped_dek, wrapped_dek_nonce, wrapped_dek_tag
             FROM rsa_keys
             WHERE tenant_id = $tenantId AND vault_name = $vault AND key_name = $name AND deleted_at_unix_seconds IS NULL;
             """;
-        command.Parameters.AddWithValue("$tenantId", keyId.TenantId.Value.ToString("D"));
-        command.Parameters.AddWithValue("$vault", keyId.Vault);
-        command.Parameters.AddWithValue("$name", keyId.Name);
-        using var reader = command.ExecuteReader();
-        if (!reader.Read())
-        {
-            throw new KeyNotFoundException("The requested KMS key was not found.");
-        }
+            command.Parameters.AddWithValue("$tenantId", keyId.TenantId.Value.ToString("D"));
+            command.Parameters.AddWithValue("$vault", keyId.Vault);
+            command.Parameters.AddWithValue("$name", keyId.Name);
+            using var reader = command.ExecuteReader();
+            if (!reader.Read())
+            {
+                throw new KeyNotFoundException("The requested KMS key was not found.");
+            }
 
-        var publicJwk = JsonSerializer.Deserialize<Dictionary<string, string>>(reader.GetString(0))
-            ?? throw new InvalidOperationException("The persisted public JWK is invalid.");
-        var encrypted = new EncryptedKeyRecord(
-            keyId,
-            ReadBlob(reader, 3),
-            ReadBlob(reader, 4),
-            ReadBlob(reader, 5),
-            ReadBlob(reader, 6),
-            ReadBlob(reader, 7),
-            ReadBlob(reader, 8));
-        return new StoredRsaKey(keyId, encrypted, publicJwk, reader.GetInt32(1), reader.GetInt64(2) != 0);
+            var publicJwk = JsonSerializer.Deserialize<Dictionary<string, string>>(reader.GetString(0))
+                ?? throw new InvalidOperationException("The persisted public JWK is invalid.");
+            var encrypted = new EncryptedKeyRecord(
+                keyId,
+                ReadBlob(reader, 3),
+                ReadBlob(reader, 4),
+                ReadBlob(reader, 5),
+                ReadBlob(reader, 6),
+                ReadBlob(reader, 7),
+                ReadBlob(reader, 8));
+            return new StoredRsaKey(keyId, encrypted, publicJwk, reader.GetInt32(1), reader.GetInt64(2) != 0);
         }
     }
 
@@ -134,6 +134,41 @@ public sealed class SqliteRsaKeyStore : IDisposable
         {
             key = null;
             return false;
+        }
+    }
+
+    public DeletedRsaKey GetDeleted(KmsKeyId keyId)
+    {
+        lock (_gate)
+        {
+            using var command = _connection.CreateCommand();
+            command.CommandText = """
+                SELECT public_jwk, key_size, enabled, deleted_at_unix_seconds, ciphertext, ciphertext_nonce, ciphertext_tag,
+                       wrapped_dek, wrapped_dek_nonce, wrapped_dek_tag
+                FROM rsa_keys
+                WHERE tenant_id = $tenantId AND vault_name = $vault AND key_name = $name AND deleted_at_unix_seconds IS NOT NULL;
+                """;
+            command.Parameters.AddWithValue("$tenantId", keyId.TenantId.Value.ToString("D"));
+            command.Parameters.AddWithValue("$vault", keyId.Vault);
+            command.Parameters.AddWithValue("$name", keyId.Name);
+            using var reader = command.ExecuteReader();
+            if (!reader.Read())
+            {
+                throw new KeyNotFoundException("The requested deleted KMS key was not found.");
+            }
+
+            var publicJwk = JsonSerializer.Deserialize<Dictionary<string, string>>(reader.GetString(0))
+                ?? throw new InvalidOperationException("The persisted public JWK is invalid.");
+            var encrypted = new EncryptedKeyRecord(
+                keyId,
+                ReadBlob(reader, 4),
+                ReadBlob(reader, 5),
+                ReadBlob(reader, 6),
+                ReadBlob(reader, 7),
+                ReadBlob(reader, 8),
+                ReadBlob(reader, 9));
+            var key = new StoredRsaKey(keyId, encrypted, publicJwk, reader.GetInt32(1), reader.GetInt64(2) != 0);
+            return new DeletedRsaKey(key, DateTimeOffset.FromUnixTimeSeconds(reader.GetInt64(3)));
         }
     }
 
@@ -241,3 +276,5 @@ public sealed class KeyAlreadyExistsException : InvalidOperationException
     {
     }
 }
+
+public sealed record DeletedRsaKey(StoredRsaKey Key, DateTimeOffset DeletedAt);

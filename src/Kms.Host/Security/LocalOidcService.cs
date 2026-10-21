@@ -107,13 +107,13 @@ public sealed class LocalOidcService
     public object Discovery(HttpRequest request) => new
     {
         issuer = Issuer(request),
-        token_endpoint = $"{BaseAddress(request)}/{_options.TenantId:D}/oauth2/v2.0/token",
-        jwks_uri = $"{BaseAddress(request)}/{_options.TenantId:D}/discovery/v2.0/keys",
+        token_endpoint = $"{_options.BaseAddress(request)}/{_options.TenantId:D}/oauth2/v2.0/token",
+        jwks_uri = $"{_options.BaseAddress(request)}/{_options.TenantId:D}/discovery/v2.0/keys",
     };
 
     public object Jwks() => new { keys = new[] { PublicJwk(GetSigningKey()) } };
 
-    public string Issuer(HttpRequest request) => $"{BaseAddress(request)}/{_options.TenantId:D}/v2.0";
+    public string Issuer(HttpRequest request) => $"{_options.BaseAddress(request)}/{_options.TenantId:D}/v2.0";
 
     private StoredRsaKey GetSigningKey()
     {
@@ -144,8 +144,6 @@ public sealed class LocalOidcService
         use = "sig",
         kid = SigningKeyId,
     };
-
-    private static string BaseAddress(HttpRequest request) => $"{request.Scheme}://{request.Host}";
 
     private static string Base64UrlEncode(byte[] value)
         => Convert.ToBase64String(value).TrimEnd('=').Replace('+', '-').Replace('/', '_');
